@@ -84,6 +84,13 @@ def generate_code():
 @bot.tree.command(name="set_whitelist_domain", description="Set the email domain to whitelist")
 @app_commands.describe(domain="Email domain to whitelist (e.g. example.com)")
 async def set_whitelist_domain(interaction: discord.Interaction, domain: str):
+    # Check if the command was ran in a dm
+    if interaction.guild is None:
+        await interaction.response.send_message(
+            "❌ This command can only be used in a server.", ephemeral=True
+        )
+        return
+
     # Only allow server admins
     if not interaction.user.guild_permissions.administrator:
         await interaction.response.send_message(
@@ -91,13 +98,21 @@ async def set_whitelist_domain(interaction: discord.Interaction, domain: str):
         )
         return
 
-    # Store the whitelist domain in the database
-    c.execute(
-        "INSERT INTO guild_whitelist_domains (guild_id, domain) VALUES (?, ?)"
-        "ON CONFLICT(guild_id, domain) DO NOTHING",
-        (str(interaction.guild.id), domain)
-    )
-    conn.commit()
+    try:
+        # Store the whitelist domain in the database
+        c.execute(
+            "INSERT INTO guild_whitelist_domains (guild_id, domain) VALUES (?, ?)"
+            "ON CONFLICT(guild_id, domain) DO NOTHING",
+            (str(interaction.guild.id), domain)
+        )
+        conn.commit()
+    except sqlite3.Error as e:
+        logging.error(f"Failed to write to database: {e}")
+        await interaction.response.send_message(
+            f"❌ Failed to set whitelist domain due to a database error.", ephemeral=True
+        )
+        return
+    
 
     await interaction.response.send_message(
         f"✅ Whitelist domain set to **{domain}** for this server.", ephemeral=True
@@ -107,6 +122,13 @@ async def set_whitelist_domain(interaction: discord.Interaction, domain: str):
 @bot.tree.command(name="remove_whitelist_domain", description="Remove the email domain whitelist")
 @app_commands.describe(domain="Email domain to remove from whitelist")
 async def remove_whitelist_domain(interaction: discord.Interaction, domain: str):
+    # Check if the command was ran in a dm
+    if interaction.guild is None:
+        await interaction.response.send_message(
+            "❌ This command can only be used in a server.", ephemeral=True
+        )
+        return
+
     # Only allow server admins
     if not interaction.user.guild_permissions.administrator:
         await interaction.response.send_message(
@@ -115,8 +137,15 @@ async def remove_whitelist_domain(interaction: discord.Interaction, domain: str)
         return
 
     # Remove the whitelist domain from the database
-    c.execute("DELETE FROM guild_whitelist_domains WHERE guild_id = ? AND domain = ?", (str(interaction.guild.id), domain))
-    conn.commit()
+    try:
+        c.execute("DELETE FROM guild_whitelist_domains WHERE guild_id = ? AND domain = ?", (str(interaction.guild.id), domain))
+        conn.commit()
+    except sqlite3.Error as e:
+        logging.error(f"Failed to remove whitelist domain: {e}")
+        await interaction.response.send_message(
+            f"❌ Failed to remove whitelist domain due to a database error.", ephemeral=True
+        )
+        return
 
     await interaction.response.send_message(
         "✅ Whitelist domain removed for this server.", ephemeral=True
@@ -125,6 +154,13 @@ async def remove_whitelist_domain(interaction: discord.Interaction, domain: str)
 # Slash command to view the current whitelist email domain
 @bot.tree.command(name="view_whitelist_domain", description="View the current email domain whitelist")
 async def view_whitelist_domain(interaction: discord.Interaction):
+    # Check if the command was ran in a dm
+    if interaction.guild is None:
+        await interaction.response.send_message(
+            "❌ This command can only be used in a server.", ephemeral=True
+        )
+        return
+
     # Only allow server admins
     if not interaction.user.guild_permissions.administrator:
         await interaction.response.send_message(
@@ -133,8 +169,15 @@ async def view_whitelist_domain(interaction: discord.Interaction):
         return
 
     # Retrieve the whitelist domain from the database
-    c.execute("SELECT domain FROM guild_whitelist_domains WHERE guild_id = ?", (str(interaction.guild.id),))
-    row = c.fetchall()
+    try:
+        c.execute("SELECT domain FROM guild_whitelist_domains WHERE guild_id = ?", (str(interaction.guild.id),))
+        row = c.fetchall()
+    except sqlite3.Error as e:
+        logging.error(f"Failed to retrieve whitelist domains: {e}")
+        await interaction.response.send_message(
+            "❌ Failed to retrieve whitelist domains due to a database error.", ephemeral=True
+        )
+        return
     if not row:
         await interaction.response.send_message(
             "ℹ️ No whitelist domain is set for this server. All email domains are allowed.", ephemeral=True
@@ -149,6 +192,13 @@ async def view_whitelist_domain(interaction: discord.Interaction):
 @bot.tree.command(name="set_verified_role", description="Set the role given to verified users")
 @app_commands.describe(role="Role to assign after verification")
 async def set_verified_role(interaction: discord.Interaction, role: discord.Role):
+    # Check if the command was ran in a dm
+    if interaction.guild is None:
+        await interaction.response.send_message(
+            "❌ This command can only be used in a server.", ephemeral=True
+        )
+        return
+
     # Only allow server admins
     if not interaction.user.guild_permissions.administrator:
         await interaction.response.send_message(
@@ -157,8 +207,15 @@ async def set_verified_role(interaction: discord.Interaction, role: discord.Role
         return
 
     # Check if the bot has previously set a verified role for this guild if so, migrate all users with the old role to the new role
-    c.execute("SELECT role_id FROM guild_verified_roles WHERE guild_id = ?", (str(interaction.guild.id),))
-    row = c.fetchone()
+    try:
+        c.execute("SELECT role_id FROM guild_verified_roles WHERE guild_id = ?", (str(interaction.guild.id),))
+        row = c.fetchone()
+    except sqlite3.Error as e:
+        logging.error(f"Failed to fetch previous verified role: {e}")
+        await interaction.response.send_message(
+            "❌ Failed to fetch previous verified role due to a database error.", ephemeral=True
+        )
+        return
     if row:
         old_role_id = int(row[0])
         old_role = interaction.guild.get_role(old_role_id)
@@ -170,12 +227,19 @@ async def set_verified_role(interaction: discord.Interaction, role: discord.Role
                     await member.add_roles(role, reason="Migrating to new verified role")
 
     # Store guild_id and role_id in the database
-    c.execute(
-        "INSERT INTO guild_verified_roles (guild_id, role_id) VALUES (?, ?) "
-        "ON CONFLICT(guild_id) DO UPDATE SET role_id=excluded.role_id",
-        (str(interaction.guild.id), str(role.id))
-    )
-    conn.commit()
+    try:
+        c.execute(
+            "INSERT INTO guild_verified_roles (guild_id, role_id) VALUES (?, ?) "
+            "ON CONFLICT(guild_id) DO UPDATE SET role_id=excluded.role_id",
+            (str(interaction.guild.id), str(role.id))
+        )
+        conn.commit()
+    except sqlite3.Error as e:
+        logging.error(f"Failed to set verified role: {e}")
+        await interaction.response.send_message(
+            "❌ Failed to set verified role due to a database error.", ephemeral=True
+        )
+        return
 
     await interaction.response.send_message(
         f"✅ Verified role set to **{role.name}** for this server.", ephemeral=True
@@ -208,6 +272,13 @@ async def assign_verified_role(user: discord.User, guild_id=None):
 @bot.tree.command(name="verify", description="Start the email verification process")
 @app_commands.describe(email="Your email address to verify")
 async def verify(interaction: discord.Interaction, email: str):
+    # Check if the command was ran in a dm
+    if interaction.guild is None:
+        await interaction.response.send_message(
+            "❌ This command can only be used in a server.", ephemeral=True
+        )
+        return
+
     # Acknowledge interaction immediately
     await interaction.response.defer(ephemeral=True)  # Shows “thinking...” to user
 
@@ -307,6 +378,13 @@ async def code(interaction: discord.Interaction, code: str):
 @tree.command(name="whois", description="Check which email a user is linked to (Admin only)")
 @app_commands.describe(user="The user to check")
 async def whois(interaction: discord.Interaction, user: discord.Member):
+    # Check if the command was ran in a dm
+    if interaction.guild is None:
+        await interaction.response.send_message(
+            "❌ This command can only be used in a server.", ephemeral=True
+        )
+        return
+
     # Acknowledge interaction immediately
     await interaction.response.defer(ephemeral=True)  # Shows “thinking...” to user
 
