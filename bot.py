@@ -315,7 +315,7 @@ async def whois(interaction: discord.Interaction, user: discord.Member):
         await interaction.followup.send("❌ You do not have permission to use this command.")
         return
 
-    c.execute("SELECT email, verified_at FROM verified_users WHERE discord_id = ?", (str(user.id),))
+    c.execute("SELECT email, verified_at FROM verified_users WHERE discord_id = ? AND guild_id = ?", (str(user.id), str(interaction.guild.id)))
     result = c.fetchone()
     if not result:
         await interaction.followup.send(f"ℹ️ {user.mention} is not verified.")
