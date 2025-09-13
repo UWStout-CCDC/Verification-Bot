@@ -17,7 +17,9 @@ COPY email_sender.py .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-USER 1000
+# RUN chown -R 1000:1000 /app
+
+# USER 1000
 
 # Expose no network ports (bot connects to Discord via outgoing traffic)
 CMD ["python3", "bot.py"]
