@@ -205,6 +205,7 @@ def send_verification_email(to_email, code):
     msg['To'] = to_email
 
     with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
-        server.starttls()
+        if SMTP_PORT == 587:
+            server.starttls()
         server.login(SMTP_USER, SMTP_PASS)
         server.send_message(msg)
