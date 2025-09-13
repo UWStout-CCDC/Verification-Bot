@@ -13,7 +13,6 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 COPY bot.py .
 COPY email_sender.py .
-COPY .env .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
